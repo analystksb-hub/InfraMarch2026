@@ -32,7 +32,7 @@ td.r,th.r{text-align:right}tr.row{cursor:pointer}tr.row:hover{background:var(--h
 .sc.nd{background:repeating-linear-gradient(135deg,#64748b,#64748b 10px,#7b8798 10px,#7b8798 20px)!important;cursor:default}.sc.nd:hover{transform:none}
 .it th{white-space:normal;font-size:11px;text-align:center;min-width:74px;vertical-align:bottom}.it td.ok,.it td.no,.it td.na{text-align:center;font-size:12px}.it td.ok{background:#d1fae5;color:#065f46}.it td.no{background:#fee2e2;color:#991b1b}.it td.na{background:rgba(148,163,184,.18);color:#94a3b8}
 .it td:first-child,.it th:first-child{position:sticky;left:0;background:var(--card);z-index:2;min-width:190px;text-align:left}.it tr.sm td{background:var(--hl);font-weight:bold;cursor:pointer}.it tr.sm td:first-child{background:var(--hl)}.it .sb{display:inline-block;height:8px;border-radius:4px;margin-right:5px;vertical-align:middle}
-.dl{display:none;background:#059669;padding:5px 10px;font-size:12px;border-radius:7px}.dl.on{display:inline-block}.dlbar{float:right;margin:-2px 0 6px 10px}
+.dl{display:inline-block;background:#059669;padding:5px 10px;font-size:12px;border-radius:7px}.dl.on{display:inline-block}.dlbar{float:right;margin:-2px 0 6px 10px}
 #toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#111;color:#fff;padding:9px 16px;border-radius:10px;font-size:13px;z-index:99;display:none}
 .hint{color:var(--mu);font-size:12px;margin:0 0 6px}</style></head><body>
 <div class="hero"><h1>Delhi Primary Health Facilities – Interactive Dashboard</h1><p>Infrastructure · Services · Equipment · Human resources · Apr 2025 – Mar 2026 · Click any score card, chart bar or table row to cross-filter everything</p></div>
@@ -189,17 +189,22 @@ function sheet(aoa){const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=(aoa[0]||[
 function filtersSheet(){const a=[['Filter','Value'],['District',S.district||'All Delhi'],['Sub-district',S.sub||'All'],['Facility type',S.type||'All'],['Facility',S.fac?F.find(r=>r.c===S.fac).n:'All'],['Facilities included',filt().length]];S.conds.forEach(c=>a.push([c.w?'With':'Without',c.n]));a.push(['Source','Data Item-wise report of Delhi as on 16 Oct 2026 (PHC_Phy Infra Mar26, PHC_ServicesBMWMar26 (2), PHC_HRMar26 (3))']);return a}
 let DLM=null;
 async function download(which){
+ const dlm=await getDL();if(!dlm){await fallback(which);return}
  if(typeof XLSX==='undefined'){toast('Excel library could not be loaded');return}
- if(!DLM){toast('Downloads are not available in this view');return}
+ 
  const names={hr:['HR count','delhi_phc_hr_count'],fac:['Facility staff','delhi_phc_facility_staff'],inf:['Infrastructure','delhi_phc_infrastructure']};
  const wb=XLSX.utils.book_new();
  if(which=='all'){[['hr'],['fac'],['inf']].forEach(([k])=>XLSX.utils.book_append_sheet(wb,sheet(EXP[k]),names[k][0]))}else XLSX.utils.book_append_sheet(wb,sheet(EXP[which]),names[which][0]);
  XLSX.utils.book_append_sheet(wb,sheet(filtersSheet()),'Filters applied');
  const buf=XLSX.write(wb,{type:'array',bookType:'xlsx'});
  const fn=(which=='all'?'delhi_phc_all_tables':names[which][1])+(S.district?'_'+S.district.replace(/\s+/g,'_'):'')+'.xlsx';
- try{await DLM.save({filename:fn,data:buf});toast('Download ready: '+fn)}catch(e){if(e&&e.code=='declined')toast('Download cancelled');else toast('Could not save the file ('+(e&&e.code||'error')+')')}}
+ try{await dlm.save({filename:fn,data:buf});toast('Download ready: '+fn)}catch(e){if(e&&e.code=='declined')toast('Download cancelled');else toast('Could not save the file ('+(e&&e.code||'error')+')')}}
 document.querySelectorAll('.dl').forEach(b=>b.onclick=()=>download(b.dataset.t));
-if(window.claude&&claude.use){claude.use('downloads').then(d=>{if(d){DLM=d;document.querySelectorAll('.dl').forEach(b=>b.classList.add('on'))}}).catch(()=>{})}
+async function getDL(){if(DLM)return DLM;for(let i=0;i<34&&!DLM;i++){if(window.claude&&window.claude.use){try{DLM=await window.claude.use('downloads')}catch(e){DLM=null}break}await new Promise(r=>setTimeout(r,300))}return DLM}
+async function fallback(which){const tsv=a=>a.map(r=>r.map(c=>String(c??'').replace(/[\t\n]/g,' ')).join('\t')).join('\n');
+ if(which!='all'&&EXP[which]){try{await navigator.clipboard.writeText(tsv(EXP[which]));toast('File download is not available in this view – the table was copied to your clipboard, paste it into Excel');return}catch(e){}}
+ toast('File download is only available when this page is opened inside claude.ai – open the artifact link there')}
+getDL();
 
 /* single facility panel */
 function chip(t,v){return el('span','chip '+(v===1?'y':v===0?'x':''),t)}
